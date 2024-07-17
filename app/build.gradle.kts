@@ -22,16 +22,9 @@ repositories {
 dependencies {
     // This dependency is used by the application.
     implementation(libs.guava)
-}
 
-testing {
-    suites {
-        // Configure the built-in test suite
-        val test by getting(JvmTestSuite::class) {
-            // Use Kotlin Test test framework
-            useKotlinTest("1.9.23")
-        }
-    }
+    // NOTE: Kafka
+    implementation("org.apache.kafka:connect-api:3.5.1") // @see https://mvnrepository.com/artifact/org.apache.kafka/connect-api
 }
 
 // Apply a specific Java toolchain to ease working on different environments.
