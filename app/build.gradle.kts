@@ -10,8 +10,8 @@ plugins {
     // Apply the org.jetbrains.kotlin.jvm Plugin to add support for Kotlin.
     alias(libs.plugins.jvm)
 
-    // Apply the application plugin to add support for building a CLI application in Java.
-    application
+    // NOTE: uber jar
+    id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
 repositories {
@@ -28,6 +28,13 @@ dependencies {
 
     // NOTE: JSON
     implementation("com.fasterxml.jackson.core:jackson-databind:2.14.0")
+
+    // NOTE: 로그
+    implementation("org.slf4j:slf4j-api:1.7.32")
+    implementation("org.apache.logging.log4j:log4j-core:2.20.0")
+    implementation("org.apache.logging.log4j:log4j-api:2.20.0")
+    implementation("org.apache.logging.log4j:log4j-slf4j-impl:2.20.0")
+
 }
 
 // Apply a specific Java toolchain to ease working on different environments.
@@ -37,7 +44,8 @@ java {
     }
 }
 
-application {
-    // Define the main class for the application.
-    mainClass = "org.example.AppKt"
+tasks {
+    build {
+        dependsOn(shadowJar)
+    }
 }
