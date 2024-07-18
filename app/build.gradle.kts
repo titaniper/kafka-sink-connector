@@ -25,12 +25,15 @@ dependencies {
 
     // NOTE: Kafka
     implementation("org.apache.kafka:connect-api:3.5.1") // @see https://mvnrepository.com/artifact/org.apache.kafka/connect-api
+
+    // NOTE: JSON
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.14.0")
 }
 
 // Apply a specific Java toolchain to ease working on different environments.
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(11)
+        languageVersion = JavaLanguageVersion.of(17)
     }
 }
 

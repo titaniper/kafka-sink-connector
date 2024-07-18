@@ -1,16 +1,19 @@
 package com.example
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.connect.sink.SinkRecord
 import org.apache.kafka.connect.sink.SinkTask
+import java.sql.Struct
 import java.util.*
 
 class MySinkTask : SinkTask() {
 
     private lateinit var destTopic: String
     private lateinit var producer: KafkaProducer<String, String>
+    private val objectMapper = ObjectMapper()
 
     override fun start(props: Map<String, String>) {
         // Task 초기화 작업
@@ -30,7 +33,17 @@ class MySinkTask : SinkTask() {
     override fun put(records: Collection<SinkRecord>) {
         // 데이터를 처리하여 다른 Kafka 토픽으로 전송
         for (record in records) {
-            producer.send(ProducerRecord(destTopic, record.key() as String, record.value() as String))
+            val key = convertToJsonString(record.key())
+            val value = convertToJsonString(record.value())
+            producer.send(ProducerRecord(destTopic, key, value))
+        }
+    }
+
+    private fun convertToJsonString(data: Any?): String {
+        return when (data) {
+            is Struct -> objectMapper.writeValueAsString(data)
+            is String -> data
+            else -> data?.toString() ?: ""
         }
     }
 
