@@ -1,11 +1,16 @@
 package com.example
 
-import org.apache.kafka.connect.connector.Task
-import org.apache.kafka.connect.sink.SinkConnector
 import org.apache.kafka.common.config.ConfigDef
-import java.util.*
+import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.connect.connector.Task
+import org.apache.kafka.connect.errors.ConnectException
+import org.apache.kafka.connect.sink.SinkConnector
+import org.example.config.KafkaSinkConnectorConfig
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 
-class MySinkConnector : SinkConnector() {
+class SinkConnector : SinkConnector() {
+    private val log: Logger = LoggerFactory.getLogger(SinkConnector::class.java)
 
     private lateinit var configProps: Map<String, String>
 
@@ -14,13 +19,19 @@ class MySinkConnector : SinkConnector() {
      */
     override fun start(props: Map<String, String>) {
         configProps = props
+        try {
+            log.info("Connector props : $props")
+            KafkaSinkConnectorConfig(props)
+        } catch (e: ConfigException) {
+            throw ConnectException(e.message, e)
+        }
     }
 
     /**
      * 커넥터와 연결된 Task 클래스 타입을 반환합니다.
      */
     override fun taskClass(): Class<out Task> {
-        return MySinkTask::class.java
+        return SinkTask::class.java
     }
 
     /**
@@ -42,11 +53,7 @@ class MySinkConnector : SinkConnector() {
      * 커넥터 설정을 정의합니다.
      */
     override fun config(): ConfigDef {
-        // 커넥터 설정 정의
-        return ConfigDef()
-                .define("source.topic", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "Source Kafka Topic")
-                .define("dest.topic", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "Destination Kafka Topic")
-                .define("bootstrap.servers", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "Kafka Bootstrap Servers")
+        return KafkaSinkConnectorConfig.CONFIG
     }
 
     override fun version(): String {

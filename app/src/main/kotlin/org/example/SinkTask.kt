@@ -4,25 +4,20 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.config.ConfigException
-import org.apache.kafka.common.errors.AuthorizationException
-import org.apache.kafka.common.errors.OutOfOrderSequenceException
-import org.apache.kafka.common.errors.ProducerFencedException
 import org.apache.kafka.connect.data.Struct
-import org.apache.kafka.connect.errors.ConnectException
 import org.apache.kafka.connect.sink.SinkRecord
 import org.apache.kafka.connect.sink.SinkTask
 import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
 import java.util.*
 
-class MySinkTask : SinkTask() {
+class SinkTask : SinkTask() {
 
     private lateinit var destTopic: String
     private lateinit var producer: KafkaProducer<String, String>
     private val objectMapper = ObjectMapper()
-    private val logger: Logger = LogManager.getLogger(MySinkTask::class.java)
+    private val logger: Logger = LogManager.getLogger(SinkTask::class.java)
 
     override fun start(props: Map<String, String>) {
         // Task 초기화 작업
