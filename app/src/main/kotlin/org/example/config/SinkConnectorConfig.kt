@@ -4,7 +4,7 @@ import org.apache.kafka.common.config.AbstractConfig
 import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.config.ConfigDef.Importance
 
-class KafkaSinkConnectorConfig(props: Map<String, String>) : AbstractConfig(CONFIG, props) {
+class SinkConnectorConfig(props: Map<String, String>) : AbstractConfig(CONFIG, props) {
     companion object {
         const val SOURCE_TOPIC: String = "topics"
         const val SOURCE_TOPIC_DOC: String = "Define source topic"

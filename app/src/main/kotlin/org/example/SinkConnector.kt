@@ -5,7 +5,7 @@ import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.connect.connector.Task
 import org.apache.kafka.connect.errors.ConnectException
 import org.apache.kafka.connect.sink.SinkConnector
-import org.example.config.KafkaSinkConnectorConfig
+import org.example.config.SinkConnectorConfig
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -21,7 +21,7 @@ class SinkConnector : SinkConnector() {
         configProps = props
         try {
             log.info("Connector props : $props")
-            KafkaSinkConnectorConfig(props)
+            SinkConnectorConfig(props)
         } catch (e: ConfigException) {
             throw ConnectException(e.message, e)
         }
@@ -53,7 +53,7 @@ class SinkConnector : SinkConnector() {
      * 커넥터 설정을 정의합니다.
      */
     override fun config(): ConfigDef {
-        return KafkaSinkConnectorConfig.CONFIG
+        return SinkConnectorConfig.CONFIG
     }
 
     override fun version(): String {
