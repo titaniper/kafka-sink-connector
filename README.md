@@ -1,5 +1,26 @@
 # kafka-sink-connector
 
+## Env
+- java 17
+- gradle 8.9
+
+## Configuration Properties
+| Required | Name                      | Type   | Description                                                    | Sample        |
+|----------|---------------------------|--------|----------------------------------------------------------------|---------------|
+| O        | topics                    | String | A list of Kafka topics that the sink connector watches.        | my-topic      |
+| O        | kafka.sink.topic          | String | The Kafka topic name to which the sink connector writes.       | relay-topic   |
+| O        | kafka.sink.bootstrap      | String | The Kafka bootstrap server to which the sink connector writes. | my-kafka:9092 |
+| X        | producer.max.request.size | Int    | The maximum size of a request in bytes.                        | 20971520      |
+
+## Build
+```
+$ ./gradlew clean build
+$ tar -czvf kafka-sink-connector.tar.gz app/build/libs/app-all.jar
+
+
+$ rm ./kafka-sink-connector.tar.gz; rm app/build/libs/app-all.jar;./gradlew clean build;  tar -czvf kafka-sink-connector-dev.tar.gz app/build/libs/app-all.jar; rm /Users/kang/Desktop/workspace/labs/static/jars/kafka-sink-connector-dev.tar.gz; mv ./kafka-sink-connector-dev.tar.gz /Users/kang/Desktop/workspace/labs/static/jars/kafka-sink-connector-dev.tar.gz
+```
+
 # JAR (Java ARchive)
 - JAR 파일은 자바 애플리케이션이나 라이브러리를 패키징하는 데 사용되는 파일 형식입니다. 여러 자바 클래스 파일, 메타데이터 및 리소스 파일을 포함할 수 있습니다.
 - 장점:

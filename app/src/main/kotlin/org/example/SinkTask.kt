@@ -4,30 +4,40 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.connect.data.Schema
 import org.apache.kafka.connect.data.Struct
 import org.apache.kafka.connect.sink.SinkRecord
 import org.apache.kafka.connect.sink.SinkTask
 import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
+import org.example.config.SinkConnectorConfig
 import java.util.*
 
 class SinkTask : SinkTask() {
-
-    private lateinit var destTopic: String
+    private lateinit var connectorName: String
+    private lateinit var sinkTopic: String
     private lateinit var producer: KafkaProducer<String, String>
     private val objectMapper = ObjectMapper()
     private val logger: Logger = LogManager.getLogger(SinkTask::class.java)
 
     override fun start(props: Map<String, String>) {
-        // Task 초기화 작업
-        destTopic = props["dest.topic"] ?: throw ConfigException("Destination topic must be set")
+        val config: SinkConnectorConfig
+        connectorName = props["name"].orEmpty()
+        config = SinkConnectorConfig(props)
+
+        sinkTopic = config.getString(SinkConnectorConfig.SINK_TOPIC)
 
         val producerProps = Properties()
-        producerProps["bootstrap.servers"] = props["bootstrap.servers"]
-        producerProps["key.serializer"] = "org.apache.kafka.common.serialization.StringSerializer"
-        producerProps["value.serializer"] = "org.apache.kafka.common.serialization.StringSerializer"
+        producerProps[ProducerConfig.BOOTSTRAP_SERVERS_CONFIG] = config.getString(SinkConnectorConfig.SINK_BOOTSTRAP_SERVER)
+        producerProps[ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG] = "org.apache.kafka.common.serialization.StringSerializer"
+        producerProps[ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG] = "org.apache.kafka.common.serialization.StringSerializer"
+        producerProps[ProducerConfig.MAX_REQUEST_SIZE_CONFIG] = config.getInt(SinkConnectorConfig.PRODUCER_MAX_REQUEST_SIZE)
 
+        // NOTE: 커넥트 프로듀서 각각 고유해야한다. Multi Task 는 고려되지 않았다.
+        producerProps[ProducerConfig.TRANSACTIONAL_ID_CONFIG] = String.format("kafka-sink-connector-%s-%s-%s", connectorName, config.getString(SinkConnectorConfig.SOURCE_TOPIC), config.getString(SinkConnectorConfig.SINK_TOPIC))
+
+        producer = KafkaProducer(producerProps)
+        producer.initTransactions()
 
         /**
          * NOTE: Exactly once 를 위한 설정
@@ -57,55 +67,75 @@ class SinkTask : SinkTask() {
          * - 이를 통해 프로듀서가 정확히 한 번 전송을 보장할 수 있습니다.
          * - 트랜잭션 ID를 설정하여 트랜잭션을 활성화합니다
          */
-        producerProps[ProducerConfig.TRANSACTIONAL_ID_CONFIG] = "TRANSACTIONAL_ID_CONFIG"
-
-        producer = KafkaProducer(producerProps)
-        producer.initTransactions()
+//        producerProps[ProducerConfig.TRANSACTIONAL_ID_CONFIG] = "TRANSACTIONAL_ID_CONFIG"
+//
+//        producer = KafkaProducer(producerProps)
+//        producer.initTransactions()
     }
 
-    override fun put(records: Collection<SinkRecord>) {
 
+    override fun put(records: Collection<SinkRecord>) {
         producer.beginTransaction()
         try {
-            // 데이터를 처리하여 다른 Kafka 토픽으로 전송
             for (record in records) {
-                logger.info("Received record:\n" +
-                        "  topic: ${record.topic()}\n" +
-                        "  partition: ${record.kafkaPartition()}\n" +
-                        "  offset: ${record.kafkaOffset()}\n" +
-                        "  key: ${record.key()}\n" +
-                        "  value: ${convertStructToJson(record.value())}\n" +
-                        "  timestamp: ${record.timestamp()}\n"
-                )
+                val transformedRecord = transform(record)
+                if (transformedRecord == null) {
+                    continue
+                }
 
-                val structValue = record.value() as? Struct
-                val afterStruct = structValue?.getStruct("after")
-//                if (afterStruct != null) {
-//                    val eventType = afterStruct.getString("type")
-//                    if (eventType == "KillEvent") {
-//                        throw RuntimeException("Encountered a KillEvent")
-//                    }
-//                }
-
-                val key = convertStructToJson(record.key() ?: "")
-                val value = convertStructToJson(record.value() ?: "")
-
-                producer.send(ProducerRecord(destTopic, key, value))
-                logger.info("Record sent to topic $destTopic: key=$key, value=$value")
+                val key = createSchemaPayloadJson(transformedRecord.key(), transformedRecord.keySchema())
+                val value = createSchemaPayloadJson(transformedRecord.value(), transformedRecord.valueSchema())
+                producer.send(ProducerRecord(sinkTopic, key, value))
             }
             producer.commitTransaction()
         } catch (e: Exception) {
+            logger.error(e.message + " / " + connectorName, e)
             producer.abortTransaction()
             producer.close()
-            throw e;
+            throw e
         }
     }
 
-    private fun convertStructToJson(data: Any?): String {
+    // NOTE: 원본 메시지를 원하는 형태로 변환한다. Debezium, KafakEvent decorator 메시지 형태에 의존한다.
+    private fun transform(record: SinkRecord): SinkRecord? {
+        val valueStruct = record.value() as Struct
+        val afterStruct = valueStruct.getStruct("after")
+        val metadataString = afterStruct.getString("metadata")
+        if (metadataString == null) {
+            return null
+        }
+
+        val metadata = objectMapper.readTree(metadataString)
+        val prefix = metadata["prefix"]?.asText()
+
+        // NOTE: 1. EventType prefix 설정 (InvoiceConfirmEvent -> PaymentInvoiceConfirmEvent)
+        if (!prefix.isNullOrEmpty()) {
+            val type = afterStruct.getString("type")
+            afterStruct.put("type", String.format("%s%s", prefix, type))
+        }
+
+        return SinkRecord(
+                record.topic(),
+                record.kafkaPartition(),
+                record.keySchema(),
+                record.key(),
+                record.valueSchema(),
+                valueStruct,
+                record.kafkaOffset()
+        )
+    }
+
+    private fun createSchemaPayloadJson(data: Any, schema: Schema): String {
+        val schemaMap = convertSchemaToJson(schema)
+        val payload = convertDataToJson(data)
+        val resultMap = mapOf("schema" to schemaMap, "payload" to payload)
+        return objectMapper.writeValueAsString(resultMap)
+    }
+
+    private fun convertDataToJson(data: Any?): Any? {
         return when (data) {
-            is Struct -> objectMapper.writeValueAsString(structToMap(data))
-            is String -> data
-            else -> data?.toString() ?: ""
+            is Struct -> structToMap(data)
+            else -> data
         }
     }
 
@@ -119,8 +149,27 @@ class SinkTask : SinkTask() {
         return map
     }
 
+    private fun convertSchemaToJson(schema: Schema): Map<String, Any?> {
+        val schemaMap = mutableMapOf<String, Any?>()
+        schemaMap["type"] = schema.type().name.lowercase()
+        schemaMap["name"] = schema.name()
+        schemaMap["version"] = schema.version()
+        schemaMap["parameters"] = schema.parameters()
+        schemaMap["default"] = schema.defaultValue()
+        schemaMap["optional"] = schema.isOptional
+        if (schema.type() == Schema.Type.STRUCT) {
+            val fields = schema.fields().map { field ->
+                val fieldMap = convertSchemaToJson(field.schema()).toMutableMap()
+                fieldMap["field"] = field.name()
+                fieldMap
+            }
+            schemaMap["fields"] = fields
+        }
+
+        return schemaMap.filterValues { it != null }
+    }
+
     override fun stop() {
-        // Task 종료 작업
         producer.close()
     }
 

@@ -6,3 +6,5 @@ build
 
 # IntelliJ IDEA / GoLand project files
 .idea/
+
+.DS_Store
